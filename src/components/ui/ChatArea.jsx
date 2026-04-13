@@ -1,4 +1,5 @@
 import { useRef, useEffect } from "react";
+import { fetchClassificationResponse } from "../../services/classification-model";
 
 const ChatArea = ({ title = "New chat", messages = [], onMessagesChange }) => {
   const inputRef = useRef(null);
@@ -8,7 +9,7 @@ const ChatArea = ({ title = "New chat", messages = [], onMessagesChange }) => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     const trimmed = inputRef.current?.value.trim();
     if (!trimmed) return;
 
@@ -18,15 +19,9 @@ const ChatArea = ({ title = "New chat", messages = [], onMessagesChange }) => {
     const updated = [...messages, userMessage];
     onMessagesChange(updated);
 
-    // Simulate AI response
-    setTimeout(() => {
-      const aiMessage = {
-        id: Date.now() + 1,
-        role: "ai",
-        text: "Analyzing your requirements... I'll identify any ambiguities or conflicts shortly.",
-      };
-      onMessagesChange([...updated, aiMessage]);
-    }, 800);
+    const aiText = await fetchClassificationResponse(trimmed);
+    const aiMessage = { id: Date.now() + 1, role: "ai", text: aiText };
+    onMessagesChange([...updated, aiMessage]);
   };
 
   const handleKeyDown = (e) => {
