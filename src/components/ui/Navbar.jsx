@@ -24,7 +24,7 @@ function Navbar() {
 
                 {/* Logo / Brand */}
                 <span className="text-xl font-semibold text-gray-900">
-                    Analyzer
+                    Req-Analyzer
                 </span>
 
                 {/* Right side */}

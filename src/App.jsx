@@ -22,7 +22,7 @@ function App() {
         </h1>
 
         {/* Subheading */}
-        <p className="text-lg text-gray-500 max-w-lg leading-relaxed mb-10">
+        <p className="text-sm text-gray-500 max-w-lg leading-relaxed mb-10">
           Spot unclear, conflicting, or incomplete requirements before they cost
           you time and rework.
         </p>
