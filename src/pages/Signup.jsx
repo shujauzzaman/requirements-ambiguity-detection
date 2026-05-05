@@ -29,7 +29,7 @@ const SignupPage = () => {
     }
 
     setLoading(true);
-    const { error } = await signUp(email, password);
+    const { error, data } = await signUp(email, password);
 
     if (error) {
       setError(error.message);
@@ -37,8 +37,14 @@ const SignupPage = () => {
       return;
     }
 
-    // Supabase sends a confirmation email by default.
-    // If email confirmation is disabled in your project, navigate directly to /chat.
+    // Supabase returns a fake success for already-registered emails
+    // but the user's identities array will be empty
+    if (data?.user?.identities?.length === 0) {
+      setError("An account with this email already exists. Please sign in.");
+      setLoading(false);
+      return;
+    }
+
     setSuccess(true);
     setLoading(false);
   };
