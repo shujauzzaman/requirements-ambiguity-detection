@@ -1,9 +1,9 @@
 import { useRef, useEffect, useState } from "react";
 import { fetchClassificationResponse } from "../../services/classification-model";
-import { useAuth } from "../../auth/AuthContext.jsx"; 
+import { useAuth } from "../../auth/AuthContext.jsx";
+import { createChat, saveMessage } from "../../services/chat-service.js";
 
-const ChatArea = ({ title = "New chat", messages = [], onMessagesChange }) => {
-
+const ChatArea = ({ title = "New chat", messages = [], onMessagesChange, chatId, onChatCreated }) => {
   const { user } = useAuth();
 
   const inputRef = useRef(null);
@@ -11,13 +11,18 @@ const ChatArea = ({ title = "New chat", messages = [], onMessagesChange }) => {
 
   const [loading, setLoading] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
+  const [activeChatId, setActiveChatId] = useState(chatId ?? null);
 
-  // Structured form state
   const [form, setForm] = useState({
     role: "",
     goal: "",
     benefit: "",
   });
+
+  // Sync activeChatId if parent passes a new chatId (e.g. switching chats)
+  useEffect(() => {
+    setActiveChatId(chatId ?? null);
+  }, [chatId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -29,14 +34,11 @@ const ChatArea = ({ title = "New chat", messages = [], onMessagesChange }) => {
     !form.goal.trim() ||
     !form.benefit.trim();
 
-  // COPY FUNCTION (enhanced from demo)
   const handleCopy = async (html, id) => {
     const div = document.createElement("div");
     div.innerHTML = html;
     const cleanText = div.innerText;
-
     await navigator.clipboard.writeText(cleanText);
-
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 4000);
   };
@@ -46,51 +48,43 @@ const ChatArea = ({ title = "New chat", messages = [], onMessagesChange }) => {
     return email.slice(0, 2).toUpperCase();
   };
 
-  // SEND MESSAGE (now uses structured input)
   const handleSend = async () => {
     if (isDisabled) return;
 
     const structuredText = `As a ${form.role}, I want to ${form.goal}, so that ${form.benefit}`;
-
-    const userMessage = {
-      id: Date.now(),
-      role: "user",
-      text: structuredText,
-    };
+    const userMessage = { id: Date.now(), role: "user", text: structuredText };
 
     setForm({ role: "", goal: "", benefit: "" });
     setLoading(true);
 
     const updated = [...messages, userMessage];
-
-    // Add thinking message
-    const thinkingMessage = {
-      id: "thinking",
-      role: "ai",
-      text: "thinking",
-    };
-
-    onMessagesChange([...updated, thinkingMessage]);
+    onMessagesChange([...updated, { id: "thinking", role: "ai", text: "thinking" }]);
 
     try {
+      // 1. Create chat if first message
+      let currentChatId = activeChatId;
+      if (!currentChatId) {
+        const chatTitle = [form.role, form.goal, form.benefit].filter(Boolean).join(", ");
+        const chat = await createChat(user.id, chatTitle);
+        currentChatId = chat.id;
+        setActiveChatId(chat.id);
+        onChatCreated?.(chat);
+      }
+
+      // 2. Save user message BEFORE calling AI
+      await saveMessage(currentChatId, "user", structuredText);
+
+      // 3. Call AI
       const aiText = await fetchClassificationResponse(structuredText);
 
-      const aiMessage = {
-        id: Date.now() + 1,
-        role: "ai",
-        text: aiText,
-      };
+      // 4. Save AI message
+      await saveMessage(currentChatId, "ai", aiText);
 
-      onMessagesChange([...updated, aiMessage]);
+      onMessagesChange([...updated, { id: Date.now() + 1, role: "ai", text: aiText }]);
+
     } catch (err) {
-      onMessagesChange([
-        ...updated,
-        {
-          id: Date.now() + 2,
-          role: "ai",
-          text: "Something went wrong. Please try again.",
-        },
-      ]);
+      console.error("Chat error:", err);
+      onMessagesChange([...updated, { id: Date.now() + 2, role: "ai", text: "Something went wrong. Please try again." }]);
     } finally {
       setLoading(false);
     }
@@ -130,7 +124,7 @@ const ChatArea = ({ title = "New chat", messages = [], onMessagesChange }) => {
               {msg.role === "ai" ? "AI" : getInitials(user?.email)}
             </div>
 
-            {/* Message */}
+            {/* Message bubble */}
             <div className="relative group max-w-[72%]">
               <div
                 className={`px-4 py-2.5 text-sm leading-relaxed ${
@@ -153,7 +147,7 @@ const ChatArea = ({ title = "New chat", messages = [], onMessagesChange }) => {
                 )}
               </div>
 
-              {/* COPY BUTTON (enhanced from demo - works for all non-thinking messages) */}
+              {/* Copy button */}
               {msg.id !== "thinking" && (
                 <button
                   onClick={() => handleCopy(msg.text, msg.id)}
@@ -167,7 +161,7 @@ const ChatArea = ({ title = "New chat", messages = [], onMessagesChange }) => {
                     text-gray-400 hover:text-gray-600`}
                 >
                   <div className="relative w-4 h-4">
-                    {/* COPY ICON */}
+                    {/* Copy icon */}
                     <svg
                       className={`absolute inset-0 transition-all duration-200 ${
                         copiedId === msg.id
@@ -184,7 +178,7 @@ const ChatArea = ({ title = "New chat", messages = [], onMessagesChange }) => {
                       <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
                     </svg>
 
-                    {/* CHECK ICON */}
+                    {/* Check icon */}
                     <svg
                       className={`absolute inset-0 transition-all duration-200 ${
                         copiedId === msg.id
@@ -212,7 +206,7 @@ const ChatArea = ({ title = "New chat", messages = [], onMessagesChange }) => {
         <div ref={bottomRef} />
       </div>
 
-      {/* STRUCTURED INPUT (from demo) */}
+      {/* Structured input */}
       <div className="px-5 py-4 border-t border-gray-200">
         <div
           className={`flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-700 ${
@@ -225,6 +219,7 @@ const ChatArea = ({ title = "New chat", messages = [], onMessagesChange }) => {
             value={form.role}
             onChange={(e) => setForm({ ...form, role: e.target.value })}
             disabled={loading}
+            onKeyDown={handleKeyDown}
             className="w-[120px] bg-white border px-2 py-1 rounded-md outline-none"
           />
 
