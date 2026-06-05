@@ -7,7 +7,6 @@ function Navbar() {
     const { user, signOut } = useAuth();
     const navigate = useNavigate();
 
-    // Extract initials from email (e.g. "john@example.com" → "JO")
     const getInitials = (email) => {
         if (!email) return "?";
         return email.slice(0, 2).toUpperCase();
@@ -50,12 +49,12 @@ function Navbar() {
                         <>
                             <Link to="/signin">
                                 <Button variant="solid" size="md">
-                                    Sign In
+                                    Console
                                 </Button>
                             </Link>
                             <Link to="/signup">
                                 <Button variant="outline" size="md">
-                                    Sign Up
+                                    Get Started
                                 </Button>
                             </Link>
                         </>

@@ -2,10 +2,15 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
-import Chat from './pages/Chat.jsx'
+import ProjectDashboard from './pages/ProjectDashboard';
+
+// New Agile Workflow Pages
+import Dashboard from './pages/Dashboard.jsx'
+import NewProject from './pages/NewProject.jsx'
+import ProjectView from './pages/ProjectView.jsx'
+
 import { AuthProvider } from "./auth/AuthContext.jsx";
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
-import Navbar from './components/ui/Navbar.jsx'
 import LoginPage from './pages/Login.jsx'
 import SignupPage from './pages/Signup.jsx'
 import GuestRoute from './auth/GuestRoute.jsx'
@@ -16,16 +21,18 @@ createRoot(document.getElementById('root')).render(
   <StrictMode>
     <Router>
       <AuthProvider>
-        {/* <Navbar /> */}
         <Routes>
-          {/* Guest only — logged in users get pushed to /chat */}
+          {/* Guest only — logged in users get pushed to /dashboard */}
           <Route path="/" element={<GuestRoute><App /></GuestRoute>} />
           <Route path="/signin" element={<GuestRoute><LoginPage /></GuestRoute>} />
           <Route path="/signup" element={<GuestRoute><SignupPage /></GuestRoute>} />
           <Route path="/demo" element={<GuestRoute><Demo /></GuestRoute>} />
 
-          {/* Protected — logged out users get pushed to /login */}
-          <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
+          {/* Protected BA Workflows — logged out users get pushed to /signin */}
+          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/project/new" element={<ProtectedRoute><NewProject /></ProtectedRoute>} />
+          <Route path="/project/:projectId" element={<ProtectedRoute><ProjectView /></ProtectedRoute>} />
+          <Route path="/project/:projectId/dashboard" element={<ProtectedRoute><ProjectDashboard /></ProtectedRoute>} />
         </Routes>
       </AuthProvider>
     </Router>

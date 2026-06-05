@@ -99,7 +99,7 @@ const Sidebar = ({ chats = [], activeChatId, onNewChat, onSelectChat, onDeleteCh
         {/* Header */}
         <div className="flex items-center justify-between px-3 py-3 border-b border-gray-200">
           <span className="text-[15px] font-medium text-gray-900 tracking-tight px-2 py-1">
-            Analyzer
+            Req-Analyzer
           </span>
           <button
             onClick={onNewChat}

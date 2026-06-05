@@ -12,32 +12,30 @@ function App() {
         <div className="inline-flex items-center gap-2 bg-indigo-50 border border-indigo-200 rounded-full px-4 py-1.5 mb-8">
           <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
           <span className="text-base font-medium text-indigo-700 tracking-wide">
-            AI-powered requirements analysis
+            AI-powered backlog refinement
           </span>
         </div>
 
         {/* Heading */}
-        <h1 className="text-6xl font-semibold text-gray-900 leading-tight tracking-tight max-w-2xl mb-5">
-          Detect ambiguity in your requirements
+        <h1 className="text-6xl font-semibold text-gray-900 leading-tight tracking-tight mx-auto mb-5">
+          Stop <span className="text-red-600"><i>ambiguous</i></span> user stories before sprint planning
         </h1>
 
         {/* Subheading */}
-        <p className="text-sm text-gray-500 max-w-lg leading-relaxed mb-10">
-          Spot unclear, conflicting, or incomplete requirements before they cost
-          you time and rework.
+        <p className="text-lg text-gray-500 max-w-xl leading-relaxed mb-10">
+          Upload your product backlog to instantly detect vague requirements, flag untestable criteria, and generate developer-ready user story rewrites.
         </p>
 
         {/* CTA */}
         <div className="flex gap-5">
           <Link to="/signup">
             <Button variant="solid" size="lg">
-              Start now
+              Analyze your backlog
             </Button>
           </Link>
-          <Link
-            to="/demo">
+          <Link to="/demo">
             <Button variant="outline" size="lg">
-                Quick demo
+              Quick demo
             </Button>
           </Link> 
         </div>

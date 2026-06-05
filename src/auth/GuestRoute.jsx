@@ -14,7 +14,7 @@ const GuestRoute = ({ children }) => {
   }
 
   if (user) {
-    return <Navigate to="/chat" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   return children;

@@ -19,12 +19,12 @@ const SignupPage = () => {
     setError("");
 
     if (password !== confirm) {
-      setError("Passwords do not match.");
+      setError("Security passwords do not match standard validation hashes.");
       return;
     }
 
     if (password.length < 6) {
-      setError("Password must be at least 6 characters.");
+      setError("Passphrase signature must be at least 6 characters.");
       return;
     }
 
@@ -37,10 +37,8 @@ const SignupPage = () => {
       return;
     }
 
-    // Supabase returns a fake success for already-registered emails
-    // but the user's identities array will be empty
     if (data?.user?.identities?.length === 0) {
-      setError("An account with this email already exists. Please sign in.");
+      setError("An operational profile with this email address is already verified. Please sign in.");
       setLoading(false);
       return;
     }
@@ -49,6 +47,7 @@ const SignupPage = () => {
     setLoading(false);
   };
 
+  // Verification State View (Post-Signup Ingestion)
   if (success) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
@@ -58,12 +57,12 @@ const SignupPage = () => {
               <polyline points="20 6 9 17 4 12" />
             </svg>
           </div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Check your email</h2>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Verify your workspace token</h2>
           <p className="text-sm text-gray-500 mb-6">
-            We sent a confirmation link to <span className="font-medium text-gray-700">{email}</span>. Click it to activate your account.
+            We sent a validation vector link to <span className="font-medium text-gray-700">{email}</span>. Confirm it to activate automated requirement scanning.
           </p>
           <Link to="/signin" className="text-sm text-indigo-600 font-medium hover:underline">
-            Back to sign in
+            Return to secure login terminal
           </Link>
         </div>
       </div>
@@ -74,39 +73,41 @@ const SignupPage = () => {
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
 
-        {/* Brand */}
+        {/* Agile Branding */}
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">
-            Analyzer
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
+            Req-Analyzer
           </h1>
-          <p className="text-sm text-gray-500 mt-1">Create your account</p>
+          <p className="text-sm text-gray-500 mt-1.5">
+            Build clear, shift-left sprint requirements in seconds
+          </p>
         </div>
 
-        {/* Card */}
-        <div className="bg-white border border-gray-200 rounded-xl p-8">
+        {/* Main Interface Entry Form */}
+        <div className="bg-white border border-gray-200 rounded-xl p-8 shadow-xs">
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
 
-            {/* Error */}
+            {/* Error Catch Zone */}
             {error && (
               <div className="text-sm text-red-600 bg-red-50 border border-red-200 px-4 py-2.5 rounded-lg">
                 {error}
               </div>
             )}
 
-            {/* Email */}
+            {/* Email Field Node */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">Email</label>
+              <label className="text-sm font-medium text-gray-700">Work Email</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
+                placeholder="pm@company.com"
                 required
                 className="px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
               />
             </div>
 
-            {/* Password */}
+            {/* Password Configuration */}
             <div className="flex flex-col gap-1.5">
               <label className="text-sm font-medium text-gray-700">Password</label>
               <input
@@ -119,9 +120,9 @@ const SignupPage = () => {
               />
             </div>
 
-            {/* Confirm Password */}
+            {/* Password Validation Double Check */}
             <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium text-gray-700">Confirm password</label>
+              <label className="text-sm font-medium text-gray-700">Confirm Password</label>
               <input
                 type="password"
                 value={confirm}
@@ -132,7 +133,7 @@ const SignupPage = () => {
               />
             </div>
 
-            {/* Submit */}
+            {/* Ingestion Engine Sign up Submit */}
             <Button
               type="submit"
               variant="solid"
@@ -140,17 +141,17 @@ const SignupPage = () => {
               disabled={loading}
               className="w-full mt-1 justify-center"
             >
-              {loading ? "Creating account..." : "Create account"}
+              {loading ? "Initializing Workspace..." : "Provision Dashboard"}
             </Button>
 
           </form>
         </div>
 
-        {/* Footer */}
+        {/* Footer Redirect Zone */}
         <p className="text-center text-sm text-gray-500 mt-5">
-          Already have an account?{" "}
+          Already monitoring backlog ambiguity?{" "}
           <Link to="/signin" className="text-indigo-600 font-medium hover:underline">
-            Sign in
+            Log into Console
           </Link>
         </p>
 
