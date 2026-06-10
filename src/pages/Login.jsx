@@ -14,18 +14,24 @@ const LoginPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError("");
-    loading(true);
 
-    const { error } = await signIn(email, password);
+    try {
+      setError("");
+      setLoading(true);
 
-    if (error) {
-      setError(error.message);
+      const { error } = await signIn(email, password);
+
+      if (error) {
+        setError(error.message);
+        return;
+      }
+
+      navigate("/chat");
+    } catch (err) {
+      setError(err.message || "Login failed");
+    } finally {
       setLoading(false);
-      return;
     }
-
-    navigate("/chat");
   };
 
   return (
