@@ -1,4 +1,4 @@
-const API_URL = "https://shujauzzaman20--classify.modal.run";
+const API_URL = "https://muhammadtehzeebul--classify.modal.run";
 
 export const fetchClassificationResponse = async (story) => {
   try {
