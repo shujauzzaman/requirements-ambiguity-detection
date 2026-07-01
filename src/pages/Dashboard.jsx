@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { supabase } from "../auth/supabaseClient"; 
 import Navbar from "../components/ui/Navbar";
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -73,7 +74,8 @@ export default function Dashboard() {
             {projects.map((project) => (
               <div 
                 key={project.id} 
-                className="bg-white rounded-xl shadow-xs border border-gray-200 p-6 flex flex-col justify-between hover:border-indigo-200 hover:shadow-md transition duration-200"
+                onClick={() => navigate(`/project/${project.id}/dashboard`)}
+                className="bg-white rounded-xl shadow-xs border border-gray-200 p-6 flex flex-col justify-between hover:border-indigo-200 hover:shadow-md transition duration-200 cursor-pointer"
               >
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 mb-2 truncate">
@@ -90,6 +92,7 @@ export default function Dashboard() {
                   </span>
                   <Link 
                     to={`/project/${project.id}`} 
+                    onClick={(e) => e.stopPropagation()}
                     className="text-sm font-semibold text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
                   >
                     Analyze Backlog &rarr;

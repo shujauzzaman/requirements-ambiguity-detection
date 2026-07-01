@@ -1,10 +1,33 @@
 import { useState } from 'react';
 import { supabase } from '../auth/supabaseClient';
+import { pushRequirementToJira } from '../services/jira-service';
 
-export default function DashboardRequirementCard({ req, isReqExpanded, onToggleExpand, onUpdateSuccess }) {
+export default function DashboardRequirementCard({ req, isReqExpanded, onToggleExpand, onUpdateSuccess, jiraConnected }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedText, setEditedText] = useState(req.improved_version || req.story_text);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPushingToJira, setIsPushingToJira] = useState(false);
+  const [jiraError, setJiraError] = useState('');
+
+  // Push this single requirement to Jira as an issue
+  const handlePushToJira = async (e) => {
+    e.stopPropagation(); // Stop accordion from closing
+    setIsPushingToJira(true);
+    setJiraError('');
+    try {
+      const result = await pushRequirementToJira(req.id);
+      if (!result.success) {
+        setJiraError(result.error || 'Failed to push to Jira.');
+        return;
+      }
+      if (onUpdateSuccess) onUpdateSuccess();
+    } catch (err) {
+      console.error('Failed to push requirement to Jira:', err);
+      setJiraError(err.message || 'Failed to push to Jira.');
+    } finally {
+      setIsPushingToJira(false);
+    }
+  };
 
   // Handle inline modification saves
   const handleSaveEdit = async (e) => {
@@ -68,6 +91,18 @@ export default function DashboardRequirementCard({ req, isReqExpanded, onToggleE
           "{req.story_text}"
         </p>
         <div className="flex items-center gap-3 shrink-0">
+          {/* Jira push status badge */}
+          {req.jira_issue_key && (
+            <a
+              href={req.jira_issue_url}
+              target="_blank"
+              rel="noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="px-2.5 py-0.5 rounded text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200 shadow-2xs hover:bg-blue-100 transition"
+            >
+              🔗 {req.jira_issue_key}
+            </a>
+          )}
           {/* Dynamic Workflow Lifecycle Badges */}
           {req.status === 'approved' ? (
             <span className="px-2.5 py-0.5 rounded text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 shadow-2xs">
@@ -181,6 +216,39 @@ export default function DashboardRequirementCard({ req, isReqExpanded, onToggleE
               </div>
             )}
           </div>
+
+          {/* 4. JIRA PUSH ACTION — only relevant once a version is approved */}
+          {req.status === 'approved' && (
+            <div className="pt-1">
+              {req.jira_issue_key ? (
+                <a
+                  href={req.jira_issue_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 text-[11px] font-medium text-blue-700 hover:underline"
+                >
+                  🔗 View {req.jira_issue_key} in Jira
+                </a>
+              ) : jiraConnected ? (
+                <div>
+                  <button
+                    onClick={handlePushToJira}
+                    disabled={isPushingToJira}
+                    className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-[11px] rounded shadow-xs transition cursor-pointer disabled:opacity-50"
+                  >
+                    {isPushingToJira ? "Pushing to Jira..." : "🔗 Push to Jira"}
+                  </button>
+                  {jiraError && (
+                    <p className="text-[11px] text-red-600 mt-1.5">{jiraError}</p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-[11px] text-gray-400 italic">
+                  Connect Jira from the dashboard header to push this requirement.
+                </p>
+              )}
+            </div>
+          )}
 
         </div>
       )}

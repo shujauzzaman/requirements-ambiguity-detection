@@ -1,14 +1,20 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { supabase } from '../auth/supabaseClient';
+import { useAuth } from '../auth/AuthContext';
 import Navbar from '../components/ui/Navbar';
 import DashboardRequirementCard from '../components/DashboardRequirementCard'; // ◄ Imported Child Element
+import JiraConnectionPanel from '../components/JiraConnectionPannel';
+import { getJiraConnection, pushAllApprovedToJira } from '../services/jira-service';
+import { generateProjectReport } from '../services/pdf-report-service';
 
 export default function ProjectDashboard() {
   const { projectId } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   
   // Data States
+  const [project, setProject] = useState(null);
   const [batches, setBatches] = useState([]);
   const [requirements, setRequirements] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -18,9 +24,34 @@ export default function ProjectDashboard() {
   const [expandedReqId, setExpandedReqId] = useState(null);
   const [visibleCounts, setVisibleCounts] = useState({});
 
+  // Jira Integration States
+  const [jiraConnection, setJiraConnection] = useState(null);
+  const [jiraConnectionLoaded, setJiraConnectionLoaded] = useState(false);
+  const [showJiraPanel, setShowJiraPanel] = useState(false);
+  const [bulkPushState, setBulkPushState] = useState(null); // { completed, total } | null
+
+  // Fetch the project's saved Jira connection (if any)
+  async function loadJiraConnection() {
+    try {
+      const connection = await getJiraConnection(projectId);
+      setJiraConnection(connection);
+    } catch (err) {
+      console.error("Error loading Jira connection:", err);
+    } finally {
+      setJiraConnectionLoaded(true);
+    }
+  }
   // Fetch all associated pipeline metrics logs
   async function loadDashboardData() {
     try {
+      const { data: projectData, error: projectErr } = await supabase
+        .from('projects')
+        .select('*')
+        .eq('id', projectId)
+        .single();
+
+      if (projectErr) throw projectErr;
+
       const { data: batchData, error: batchErr } = await supabase
         .from('batches')
         .select('*')
@@ -36,6 +67,7 @@ export default function ProjectDashboard() {
 
       if (reqErr) throw reqErr;
 
+      setProject(projectData || null);
       setBatches(batchData || []);
       setRequirements(reqData || []);
       
@@ -50,7 +82,10 @@ export default function ProjectDashboard() {
   }
 
   useEffect(() => {
-    if (projectId) loadDashboardData();
+    if (projectId) {
+      loadDashboardData();
+      loadJiraConnection();
+    }
   }, [projectId]);
 
   // Global Statistics Calculators
@@ -63,6 +98,35 @@ export default function ProjectDashboard() {
       ...prev,
       [batchId]: (prev[batchId] || 20) + 20
     }));
+  };
+
+  const handlePushAllToJira = async () => {
+    const eligible = requirements.filter((r) => r.status === 'approved' && !r.jira_issue_key);
+    if (eligible.length === 0) return;
+
+    setBulkPushState({ completed: 0, total: eligible.length });
+
+    const results = await pushAllApprovedToJira(requirements, (completed, total) => {
+      setBulkPushState({ completed, total });
+    });
+
+    const failures = results.filter((r) => !r.success);
+    await loadDashboardData();
+    setBulkPushState(null);
+
+    if (failures.length > 0) {
+      alert(`Pushed ${results.length - failures.length} of ${results.length} requirements. ${failures.length} failed — check the console for details.`);
+      console.error("Jira push failures:", failures);
+    }
+  };
+
+  const handleExportPDFReport = () => {
+    generateProjectReport({
+      project,
+      batches,
+      requirements,
+      generatedByEmail: user?.email,
+    });
   };
 
   const handleExportBatchCSV = (batch) => {
@@ -146,8 +210,6 @@ export default function ProjectDashboard() {
     );
   }
 
-  
-
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col font-sans antialiased text-gray-950">
       <Navbar />
@@ -159,13 +221,64 @@ export default function ProjectDashboard() {
             <h1 className="text-2xl font-bold tracking-tight text-gray-900">Req-Analyzer Analytics Engine</h1>
             <p className="text-sm text-gray-500">Traceability audit logs and semantic ambiguity scorecards</p>
           </div>
-          <button 
-            onClick={() => navigate(`/project/${projectId}`)}
-            className="px-4 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded-lg shadow-xs hover:bg-gray-50 transition cursor-pointer"
-          >
-            &larr; Upload New Batch File
-          </button>
+          <div className="flex items-center gap-3">
+            {/* PDF Report Export */}
+            <button
+              onClick={handleExportPDFReport}
+              className="px-4 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded-lg shadow-xs hover:bg-gray-50 transition cursor-pointer flex items-center gap-1.5"
+            >
+              📄 Export PDF Report
+            </button>
+
+            
+            {/* Jira Connection Status / Trigger */}
+            {jiraConnectionLoaded && (
+              <button
+                onClick={() => setShowJiraPanel(true)}
+                className={`px-4 py-2 text-xs font-semibold rounded-lg shadow-xs transition cursor-pointer flex items-center gap-1.5 ${
+                  jiraConnection
+                    ? "text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100"
+                    : "text-gray-700 bg-white border border-gray-200 hover:bg-gray-50"
+                }`}
+              >
+                🔗 {jiraConnection ? `Jira: ${jiraConnection.jira_project_key}` : "Connect Jira"}
+              </button>
+            )}
+
+            {/* Bulk Push To Jira */}
+            {jiraConnection && requirements.some(r => r.status === 'approved' && !r.jira_issue_key) && (
+              <button
+                onClick={handlePushAllToJira}
+                disabled={!!bulkPushState}
+                className="px-4 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-xs transition cursor-pointer disabled:opacity-50"
+              >
+                {bulkPushState
+                  ? `Pushing... ${bulkPushState.completed}/${bulkPushState.total}`
+                  : "Push All Approved to Jira"}
+              </button>
+            )}
+
+            <button 
+              onClick={() => navigate(`/project/${projectId}`)}
+              className="px-4 py-2 text-xs font-semibold text-gray-700 bg-white border border-gray-200 rounded-lg shadow-xs hover:bg-gray-50 transition cursor-pointer"
+            >
+              &larr; Upload New Batch File
+            </button>
+          </div>
         </div>
+
+        {/* Jira Connection Modal */}
+        {showJiraPanel && (
+          <JiraConnectionPanel
+            projectId={projectId}
+            connection={jiraConnection}
+            onClose={() => setShowJiraPanel(false)}
+            onSaved={(saved) => {
+              setJiraConnection(saved);
+              setShowJiraPanel(false);
+            }}
+          />
+        )}
 
         {/* Global Executive Overview Widgets */}
         <div className="grid grid-cols-3 gap-6 mb-8">
@@ -261,6 +374,7 @@ export default function ProjectDashboard() {
                               isReqExpanded={expandedReqId === req.id}
                               onToggleExpand={() => setExpandedReqId(expandedReqId === req.id ? null : req.id)}
                               onUpdateSuccess={loadDashboardData} // Automatically fires background re-fetch to update summary widgets
+                              jiraConnected={!!jiraConnection}
                             />
                           ))}
 
