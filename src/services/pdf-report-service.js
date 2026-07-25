@@ -130,7 +130,7 @@ export function generateProjectReport({ project, batches, requirements, generate
     String(idx + 1),
     truncate(req.story_text, 90),
     statusLabel(req),
-    req.status === 'approved' ? truncate(req.improved_version, 90) : '-',
+    req.status === 'approved' ? truncate(req.generated_user_story, 90) : '-',
     req.jira_issue_key || '-',
   ]);
 

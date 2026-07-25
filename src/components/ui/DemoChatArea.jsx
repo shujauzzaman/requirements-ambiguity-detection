@@ -1,259 +1,264 @@
 import { useState, useRef, useEffect } from "react";
-import { fetchClassificationResponse } from "../../services/classification-model";
 
-const INITIAL_MESSAGE = {
-  id: 1,
-  role: "ai",
-  text: "Hi! Paste your requirements and I'll detect any ambiguity, conflicts, or missing details for you.",
-};
+// Set VITE_MODAL_API_URL in your .env file (see .env.example).
+const API_URL = import.meta.env.VITE_MODAL_API_URL;
+const POLL_INTERVAL_MS = 2500;
 
-const DemoChatArea = () => {
-  const [messages, setMessages] = useState([INITIAL_MESSAGE]);
-  const [copiedId, setCopiedId] = useState(null);
-  const [loading, setLoading] = useState(false);
-
-  const [form, setForm] = useState({
-    role: "",
-    goal: "",
-    benefit: "",
+async function analyzeOne({ domain, input_type, text }) {
+  const submitRes = await fetch(`${API_URL}/submit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ requirements: [{ domain, input_type, text }] }),
   });
+  if (!submitRes.ok) throw new Error(`Submit failed with status ${submitRes.status}`);
+  const { call_id } = await submitRes.json();
 
-  const bottomRef = useRef(null);
+  while (true) {
+    const statusRes = await fetch(`${API_URL}/status?call_id=${call_id}`);
+    if (!statusRes.ok) throw new Error(`Status check failed with ${statusRes.status}`);
+    const data = await statusRes.json();
+
+    if (data.status === "done") return data.results[0];
+    if (data.status === "error") throw new Error(data.error || "Generation failed");
+
+    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+  }
+}
+
+function AnalysisCard({ result }) {
+  const hasTypes = result.ambiguity_types && result.ambiguity_types.length > 0;
+  const hasSpans = result.flagged_spans && result.flagged_spans.length > 0;
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+        <span className="text-[15px] font-medium text-gray-900">Analysis Result</span>
+        <span
+          className={`px-2.5 py-0.5 rounded text-[13px] font-semibold ${
+            result.is_ambiguous
+              ? "bg-red-50 text-red-700 border border-red-100"
+              : "bg-emerald-50 text-emerald-700 border border-emerald-100"
+          }`}
+        >
+          {result.is_ambiguous ? "Ambiguous" : "Clear"}
+        </span>
+      </div>
+
+      <div className="p-4 space-y-4 text-[15px]">
+        {result.is_ambiguous && (
+          <div>
+            <h4 className="font-semibold text-red-800 uppercase tracking-wider text-[12px] mb-1">
+              Flaw Analysis
+            </h4>
+            <div className="bg-gray-50 border border-gray-100 rounded-lg p-3 text-gray-700 leading-relaxed">
+              {hasTypes && <p>Type(s): {result.ambiguity_types.join(", ")}</p>}
+              {hasSpans && (
+                <p className="mt-1">
+                  Flagged phrase(s): {result.flagged_spans.map((s) => `"${s}"`).join(", ")}
+                </p>
+              )}
+              {!hasTypes && !hasSpans && <p>No specific spans flagged.</p>}
+            </div>
+          </div>
+        )}
+
+        {result.clarification_questions && result.clarification_questions.length > 0 && (
+          <div>
+            <h4 className="font-semibold text-amber-800 uppercase tracking-wider text-[12px] mb-1">
+              Clarification Questions
+            </h4>
+            <ul className="list-disc pl-5 space-y-1 text-gray-700 bg-gray-50 border border-gray-100 rounded-lg p-3">
+              {result.clarification_questions.map((q, i) => (
+                <li key={i}>{q}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {result.user_story && (
+          <div>
+            <h4 className="font-semibold text-emerald-800 uppercase tracking-wider text-[12px] mb-1">
+              Refined User Story
+            </h4>
+            <p className="bg-emerald-50/40 border border-emerald-100 rounded-lg p-3 text-gray-800 italic">
+              "{result.user_story}"
+            </p>
+          </div>
+        )}
+
+        {result.acceptance_criteria && result.acceptance_criteria.length > 0 && (
+          <div>
+            <h4 className="font-semibold text-gray-700 uppercase tracking-wider text-[12px] mb-1">
+              Acceptance Criteria
+            </h4>
+            <ul className="list-disc pl-5 space-y-1 text-gray-700 bg-gray-50 border border-gray-100 rounded-lg p-3">
+              {result.acceptance_criteria.map((ac, i) => (
+                <li key={i}>{ac}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {result.raw_output && (
+          <div>
+            <h4 className="font-semibold text-gray-400 uppercase tracking-wider text-[12px] mb-1">
+              Raw Model Output (unparsed)
+            </h4>
+            <p className="bg-gray-50 border border-gray-100 rounded-lg p-3 text-gray-500 whitespace-pre-wrap">
+              {result.raw_output}
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default function DemoChatArea() {
+  const [messages, setMessages] = useState([]); // { role: 'user'|'assistant'|'error', text?, result? }
+  const [inputText, setInputText] = useState("");
+  const [inputType, setInputType] = useState("requirement"); // 'requirement' | 'user_story'
+  const [isLoading, setIsLoading] = useState(false);
+  const scrollRef = useRef(null);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  const isDisabled =
-    loading ||
-    !form.role.trim() ||
-    !form.goal.trim() ||
-    !form.benefit.trim();
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages, isLoading]);
 
   const handleSend = async () => {
-    if (isDisabled) return;
+    const text = inputText.trim();
+    if (!text || isLoading) return;
 
-    const structuredText = `As a ${form.role}, I want to ${form.goal}, so that ${form.benefit}`;
-
-    const userMessage = {
-      id: Date.now(),
-      role: "user",
-      text: structuredText,
-    };
-
-    setForm({ role: "", goal: "", benefit: "" });
-    setLoading(true);
-
-    const updated = [...messages, userMessage];
-
-    const thinkingMessage = {
-      id: "thinking",
-      role: "ai",
-      text: "thinking",
-    };
-
-    setMessages([...updated, thinkingMessage]);
+    setMessages((prev) => [...prev, { role: "user", text }]);
+    setInputText("");
+    setIsLoading(true);
 
     try {
-      const aiText = await fetchClassificationResponse(structuredText);
-
-      const aiMessage = {
-        id: Date.now() + 1,
-        role: "ai",
-        text: aiText,
-      };
-
-      setMessages([...updated, aiMessage]);
+      const result = await analyzeOne({ domain: "general", input_type: inputType, text });
+      setMessages((prev) => [...prev, { role: "assistant", result }]);
     } catch (err) {
-      setMessages([
-        ...updated,
-        {
-          id: Date.now() + 2,
-          role: "ai",
-          text: "Something went wrong. Please try again.",
-        },
+      setMessages((prev) => [
+        ...prev,
+        { role: "error", text: err.message || "Something went wrong analyzing that." },
       ]);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === "Enter" && !isDisabled) {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
   };
 
-  const handleCopy = async (html, id) => {
-    const div = document.createElement("div");
-    div.innerHTML = html;
-    const cleanText = div.innerText;
-
-    await navigator.clipboard.writeText(cleanText);
-
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 4000);
-  };
-
   return (
-    <main className="flex flex-col flex-1 h-full bg-white overflow-hidden">
+    <main className="flex-1 flex flex-col h-full bg-gray-50">
+      {/* Message list */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6">
+        <div className="max-w-2xl mx-auto space-y-4">
+          {messages.length === 0 && (
+            <div className="text-center py-20">
+              <h2 className="text-lg font-semibold text-gray-800 mb-2">
+                Try the Requirements Analyzer
+              </h2>
+              <p className="text-sm text-gray-400 max-w-sm mx-auto">
+                Paste a requirement or user story below and see how it gets analyzed for
+                ambiguity, clarified, and turned into acceptance criteria.
+              </p>
+            </div>
+          )}
 
-      {/* MESSAGES */}
-      <div className="flex-1 overflow-y-auto px-5 py-6 flex flex-col gap-5">
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={`flex items-start gap-2.5 ${
-              msg.role === "user" ? "flex-row-reverse" : ""
-            }`}
-          >
-            {/* Avatar */}
-            <div
-              className={`w-[30px] h-[30px] rounded-full flex items-center justify-center text-[11px] font-medium flex-shrink-0 ${
-                msg.role === "ai"
-                  ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
-                  : "bg-indigo-600 text-white"
+          {messages.map((msg, i) => {
+            if (msg.role === "user") {
+              return (
+                <div key={i} className="flex justify-end">
+                  <div className="bg-indigo-600 text-white text-[15px] rounded-2xl rounded-br-sm px-4 py-2.5 max-w-md">
+                    {msg.text}
+                  </div>
+                </div>
+              );
+            }
+            if (msg.role === "error") {
+              return (
+                <div key={i} className="flex justify-start">
+                  <div className="bg-red-50 border border-red-200 text-red-700 text-[15px] rounded-2xl rounded-bl-sm px-4 py-2.5 max-w-md">
+                    {msg.text}
+                  </div>
+                </div>
+              );
+            }
+            return (
+              <div key={i} className="flex justify-start w-full">
+                <div className="w-full max-w-lg">
+                  <AnalysisCard result={msg.result} />
+                </div>
+              </div>
+            );
+          })}
+
+          {isLoading && (
+            <div className="flex justify-start">
+              <div className="bg-white border border-gray-200 rounded-2xl rounded-bl-sm px-4 py-2.5 flex items-center gap-2">
+                <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" />
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Input bar */}
+      <div className="border-t border-gray-200 bg-white px-6 py-4">
+        <div className="max-w-2xl mx-auto">
+          <div className="flex items-center gap-2 mb-2">
+            <button
+              onClick={() => setInputType("requirement")}
+              className={`px-2.5 py-1 rounded-md text-[13px] font-medium transition ${
+                inputType === "requirement"
+                  ? "bg-indigo-100 text-indigo-700"
+                  : "bg-gray-100 text-gray-500 hover:bg-gray-200"
               }`}
             >
-              {msg.role === "ai" ? "AI" : "G"}
-            </div>
-
-            {/* Message */}
-            <div className="relative group max-w-[72%]">
-
-              <div
-                className={`px-4 py-2.5 text-sm leading-relaxed ${
-                  msg.role === "ai"
-                    ? "bg-gray-50 border border-gray-200 text-gray-700 rounded-xl"
-                    : "bg-indigo-600 text-white rounded-xl"
-                }`}
-              >
-                {msg.id === "thinking" ? (
-                  <div className="flex items-center gap-2 text-gray-500 animate-pulse">
-                    AI is thinking
-                    <span className="flex gap-1">
-                      <span className="w-1 h-1 bg-gray-400 rounded-full animate-bounce"></span>
-                      <span className="w-1 h-1 bg-gray-400 rounded-full animate-bounce delay-75"></span>
-                      <span className="w-1 h-1 bg-gray-400 rounded-full animate-bounce delay-150"></span>
-                    </span>
-                  </div>
-                ) : (
-                  <div dangerouslySetInnerHTML={{ __html: msg.text }} />
-                )}
-              </div>
-
-              {/* COPY BUTTON */}
-              {msg.id !== "thinking" && (
-                <button
-                  onClick={() => handleCopy(msg.text, msg.id)}
-                  className={`absolute -bottom-6 transition-opacity duration-200
-                    ${msg.role === "ai" ? "left-1" : "right-1"}
-                    ${
-                      copiedId === msg.id
-                        ? "opacity-100"
-                        : "opacity-0 group-hover:opacity-100"
-                    }
-                    text-gray-400 hover:text-gray-600`}
-                >
-                  <div className="relative w-4 h-4">
-
-                    {/* COPY ICON */}
-                    <svg
-                      className={`absolute inset-0 transition-all duration-200 ${
-                        copiedId === msg.id
-                          ? "opacity-0 scale-90"
-                          : "opacity-100 scale-100"
-                      }`}
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={1.8}
-                    >
-                      <rect x="9" y="9" width="13" height="13" rx="2" />
-                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                    </svg>
-
-                    {/* CHECK ICON */}
-                    <svg
-                      className={`absolute inset-0 transition-all duration-200 ${
-                        copiedId === msg.id
-                          ? "opacity-100 scale-100"
-                          : "opacity-0 scale-90"
-                      }`}
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2.2}
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M5 13l4 4L19 7"
-                      />
-                    </svg>
-
-                  </div>
-                </button>
-              )}
-            </div>
+              Requirement
+            </button>
+            <button
+              onClick={() => setInputType("user_story")}
+              className={`px-2.5 py-1 rounded-md text-[13px] font-medium transition ${
+                inputType === "user_story"
+                  ? "bg-indigo-100 text-indigo-700"
+                  : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+              }`}
+            >
+              User Story
+            </button>
           </div>
-        ))}
-        <div ref={bottomRef} />
-      </div>
 
-      {/* INPUT */}
-      <div className="px-5 py-4 border-t border-gray-200">
-
-        <div className={`flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-700 ${
-          loading ? "opacity-60" : ""
-        }`}>
-
-          <span>As a</span>
-
-          <input
-            value={form.role}
-            onChange={(e) => setForm({ ...form, role: e.target.value })}
-            disabled={loading}
-            className="w-[120px] bg-white border px-2 py-1 rounded-md outline-none"
-          />
-
-          <span>, I want to</span>
-
-          <input
-            value={form.goal}
-            onChange={(e) => setForm({ ...form, goal: e.target.value })}
-            disabled={loading}
-            onKeyDown={handleKeyDown}
-            className="flex-1 min-w-[140px] bg-white border px-2 py-1 rounded-md outline-none"
-          />
-
-          <span>, so that</span>
-
-          <input
-            value={form.benefit}
-            onChange={(e) => setForm({ ...form, benefit: e.target.value })}
-            disabled={loading}
-            onKeyDown={handleKeyDown}
-            className="flex-1 min-w-[140px] bg-white border px-2 py-1 rounded-md outline-none"
-          />
-
-          <button
-            onClick={handleSend}
-            disabled={isDisabled}
-            className="w-8 h-8 bg-indigo-600 text-white rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            ➤
-          </button>
-
+          <div className="flex items-end gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 focus-within:border-indigo-300 transition">
+            <textarea
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="e.g. The system should load user profiles very fast."
+              rows={1}
+              disabled={isLoading}
+              className="flex-1 bg-transparent resize-none text-[15px] text-gray-900 placeholder-gray-400 focus:outline-none py-1.5 max-h-32"
+            />
+            <button
+              onClick={handleSend}
+              disabled={isLoading || !inputText.trim()}
+              className="shrink-0 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-[14px] font-medium rounded-lg transition"
+            >
+              {isLoading ? "Analyzing..." : "Send"}
+            </button>
+          </div>
+          <p className="text-[12px] text-gray-400 mt-1.5 text-center">
+            First request may take up to a minute while the model warms up.
+          </p>
         </div>
-
       </div>
-
     </main>
   );
-};
-
-export default DemoChatArea;
+}

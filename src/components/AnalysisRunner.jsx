@@ -1,13 +1,28 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../auth/supabaseClient';
 
-const API_URL = "https://shujauzzaman20--classify.modal.run";
+// Set VITE_MODAL_API_URL in your .env file (see .env.example).
+const API_URL = import.meta.env.VITE_MODAL_API_URL;
 const BATCH_SIZE = 10;
+const POLL_INTERVAL_MS = 3000;
 
-// ◄ Added fileName to the destructuring props here
+// Poll /status for a single call_id until it's done (or errors).
+async function pollUntilDone(callId) {
+  while (true) {
+    const res = await fetch(`${API_URL}/status?call_id=${callId}`);
+    if (!res.ok) throw new Error(`Status check failed with ${res.status}`);
+    const data = await res.json();
+
+    if (data.status === "done") return data.results;
+    if (data.status === "error") throw new Error(data.error || "Generation failed");
+
+    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+  }
+}
+
 export default function AnalysisRunner({ projectId, stories, fileName, onCancel, onComplete }) {
   const [currentBatchProgress, setCurrentBatchProgress] = useState(0);
-  const [status, setStatus] = useState('processing'); // 'processing' | 'completed' | 'error'
+  const [status, setStatus] = useState('processing');
   const [errorMessage, setErrorMessage] = useState('');
   const hasStarted = useRef(false);
 
@@ -17,6 +32,16 @@ export default function AnalysisRunner({ projectId, stories, fileName, onCancel,
 
     async function processInBatches() {
       try {
+        // 0. Fetch the project's actual domain — used for every story in this batch
+        const { data: projectData, error: projectError } = await supabase
+          .from('projects')
+          .select('domain')
+          .eq('id', projectId)
+          .single();
+
+        if (projectError) throw projectError;
+        const projectDomain = projectData?.domain || 'general';
+
         // 1. Determine the next sequential batch number for this project
         const { data: existingBatches, error: fetchError } = await supabase
           .from('batches')
@@ -26,14 +51,14 @@ export default function AnalysisRunner({ projectId, stories, fileName, onCancel,
         if (fetchError) throw fetchError;
         const nextBatchNumber = (existingBatches?.length || 0) + 1;
 
-        // 2. CREATE PARENT RECORD WITH ORIGINAL FILENAME
+        // 2. Create parent batch record
         const { data: newBatch, error: batchError } = await supabase
           .from('batches')
           .insert([
             {
               project_id: projectId,
               batch_number: nextBatchNumber,
-              file_name: fileName || `Uploaded_Requirements_#${nextBatchNumber}` // ◄ Uses real filename, falls back if blank
+              file_name: fileName || `Uploaded_Requirements_#${nextBatchNumber}`
             }
           ])
           .select()
@@ -42,22 +67,29 @@ export default function AnalysisRunner({ projectId, stories, fileName, onCancel,
         if (batchError) throw batchError;
         const generatedBatchId = newBatch.id;
 
-        // 3. Begin looping through user stories in chunks
+        // 3. Loop through stories in chunks — each chunk runs sequentially
+        //    on a single warm GPU container (no parallel containers spun up)
         for (let i = 0; i < stories.length; i += BATCH_SIZE) {
           const batch = stories.slice(i, i + BATCH_SIZE);
-          const batchTexts = batch.map(s => s.story_text);
-          
+
           setCurrentBatchProgress(i);
 
-          const response = await fetch(API_URL, {
+          const submitRes = await fetch(`${API_URL}/submit`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ user_stories: batchTexts }),
+            body: JSON.stringify({
+              requirements: batch.map((s) => ({
+                text: s.story_text,
+                domain: projectDomain,
+                input_type: 'user_story',
+              })),
+            }),
           });
 
-          if (!response.ok) throw new Error(`Model server returned status ${response.status}`);
-          const data = await response.json();
-          const aiResults = data.results || [];
+          if (!submitRes.ok) throw new Error(`Submit failed with status ${submitRes.status}`);
+          const { call_id } = await submitRes.json();
+
+          const aiResults = await pollUntilDone(call_id);
 
           const rowsToInsert = batch.map((story, index) => {
             const aiResponse = aiResults[index] || {};
@@ -67,9 +99,11 @@ export default function AnalysisRunner({ projectId, stories, fileName, onCancel,
               story_text: story.story_text,
               is_ambiguous: aiResponse.is_ambiguous ?? true,
               ambiguity_types: aiResponse.ambiguity_types || [],
-              explanation: aiResponse.explanation || '',
+              flagged_spans: aiResponse.flagged_spans || [],
               clarification_questions: aiResponse.clarification_questions || [],
-              improved_version: aiResponse.improved_version || '',
+              generated_user_story: aiResponse.user_story || '',
+              acceptance_criteria: aiResponse.acceptance_criteria || [],
+              model_version: 'dora-8b',
               status: 'completed'
             };
           });
@@ -80,7 +114,7 @@ export default function AnalysisRunner({ projectId, stories, fileName, onCancel,
 
           if (dbError) throw dbError;
         }
-        
+
         setStatus('completed');
 
       } catch (err) {
@@ -93,7 +127,7 @@ export default function AnalysisRunner({ projectId, stories, fileName, onCancel,
     if (stories.length > 0) {
       processInBatches();
     }
-  }, [stories, projectId, fileName]); // ◄ Added fileName to dependency array
+  }, [stories, projectId, fileName]);
 
   const processedCount = Math.min(currentBatchProgress + BATCH_SIZE, stories.length);
   const progressPercentage = Math.round((processedCount / stories.length) * 100);

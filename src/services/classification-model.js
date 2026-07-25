@@ -1,4 +1,4 @@
-const API_URL = "https://muhammadtehzeebul--classify.modal.run";
+const API_URL = "https://muhammadtehzeebul--req-ambiguity-dora-model-web.modal.run";
 
 export const fetchClassificationResponse = async (story) => {
   try {

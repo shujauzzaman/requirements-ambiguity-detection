@@ -4,10 +4,22 @@ import { pushRequirementToJira } from '../services/jira-service';
 
 export default function DashboardRequirementCard({ req, isReqExpanded, onToggleExpand, onUpdateSuccess, jiraConnected }) {
   const [isEditing, setIsEditing] = useState(false);
-  const [editedText, setEditedText] = useState(req.improved_version || req.story_text);
+  const [editedText, setEditedText] = useState(req.generated_user_story || req.story_text);
   const [isSaving, setIsSaving] = useState(false);
   const [isPushingToJira, setIsPushingToJira] = useState(false);
   const [jiraError, setJiraError] = useState('');
+
+  // Build a human-readable flaw analysis line from the new schema columns
+  const flawAnalysisText = (() => {
+    const hasTypes = req.ambiguity_types && req.ambiguity_types.length > 0;
+    const hasSpans = req.flagged_spans && req.flagged_spans.length > 0;
+    if (!hasTypes && !hasSpans) {
+      return "No explicit flaw flags detected by the adapter weights runtime model.";
+    }
+    const typesPart = hasTypes ? `Type(s): ${req.ambiguity_types.join(', ')}` : '';
+    const spansPart = hasSpans ? `Flagged phrase(s): ${req.flagged_spans.map(s => `"${s}"`).join(', ')}` : '';
+    return [typesPart, spansPart].filter(Boolean).join('\n');
+  })();
 
   // Push this single requirement to Jira as an issue
   const handlePushToJira = async (e) => {
@@ -39,7 +51,7 @@ export default function DashboardRequirementCard({ req, isReqExpanded, onToggleE
       const { error } = await supabase
         .from('requirements')
         .update({ 
-          improved_version: editedText,
+          generated_user_story: editedText,
           status: 'completed' // Reset back to completed if they modified it without approving yet
         })
         .eq('id', req.id);
@@ -63,7 +75,7 @@ export default function DashboardRequirementCard({ req, isReqExpanded, onToggleE
       const { error } = await supabase
         .from('requirements')
         .update({ 
-          improved_version: editedText,
+          generated_user_story: editedText,
           status: 'approved' 
         })
         .eq('id', req.id);
@@ -132,8 +144,8 @@ export default function DashboardRequirementCard({ req, isReqExpanded, onToggleE
             <h4 className="font-semibold text-red-800 uppercase tracking-wider text-[10px] mb-1">
               Flaw Analysis Report
             </h4>
-            <p className="text-gray-700 leading-relaxed bg-white p-3 rounded-lg border border-gray-100">
-              {req.explanation || "No explicit flaw flags detected by the adapter weights runtime model."}
+            <p className="text-gray-700 leading-relaxed bg-white p-3 rounded-lg border border-gray-100 whitespace-pre-line">
+              {flawAnalysisText}
             </p>
           </div>
 
@@ -182,7 +194,7 @@ export default function DashboardRequirementCard({ req, isReqExpanded, onToggleE
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      setEditedText(req.improved_version || req.story_text);
+                      setEditedText(req.generated_user_story || req.story_text);
                       setIsEditing(false);
                     }}
                     disabled={isSaving}

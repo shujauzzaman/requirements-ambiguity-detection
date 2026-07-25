@@ -146,14 +146,20 @@ export default function ProjectDashboard() {
       const issueType = 'Story';
       
       // Use refined version if approved, otherwise fall back to original text
-      const summary = req.status === 'approved' && req.improved_version 
-        ? req.improved_version 
+      const summary = req.status === 'approved' && req.generated_user_story 
+        ? req.generated_user_story 
         : req.story_text;
 
       // Compile a rich description block for the developers
       let description = `Original Ingested Story:\n"${req.story_text}"\n\n`;
       if (req.is_ambiguous) {
-        description += `⚠️ AI FLAW ANALYSIS:\n${req.explanation || 'N/A'}\n\n`;
+        const ambiguityTypes = (req.ambiguity_types && req.ambiguity_types.length > 0)
+          ? req.ambiguity_types.join(', ')
+          : 'unspecified';
+        const flaggedSpans = (req.flagged_spans && req.flagged_spans.length > 0)
+          ? req.flagged_spans.map(s => `"${s}"`).join(', ')
+          : 'none flagged';
+        description += `⚠️ AI FLAW ANALYSIS:\nType(s): ${ambiguityTypes}\nFlagged phrase(s): ${flaggedSpans}\n\n`;
         if (req.clarification_questions && req.clarification_questions.length > 0) {
           description += `❓ CLARIFICATION QUESTIONS:\n${req.clarification_questions.join('\n')}`;
         }

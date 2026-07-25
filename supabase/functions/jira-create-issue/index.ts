@@ -24,42 +24,30 @@ const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
 
 function buildDescriptionADF(req) {
-  const content = [
+  const content = [];
+
+  const userStoryText = req.generated_user_story || req.story_text || "";
+  content.push(
     {
       type: "paragraph",
-      content: [
-        { type: "text", text: "Original requirement text:", marks: [{ type: "strong" }] },
-      ],
+      content: [{ type: "text", text: "User Story:", marks: [{ type: "strong" }] }],
     },
     {
       type: "paragraph",
-      content: [{ type: "text", text: req.story_text || "" }],
-    },
-  ];
+      content: [{ type: "text", text: userStoryText }],
+    }
+  );
 
-  if (req.is_ambiguous && req.explanation) {
-    content.push(
-      {
-        type: "paragraph",
-        content: [{ type: "text", text: "⚠️ Ambiguity analysis:", marks: [{ type: "strong" }] }],
-      },
-      {
-        type: "paragraph",
-        content: [{ type: "text", text: req.explanation }],
-      }
-    );
-  }
-
-  if (Array.isArray(req.clarification_questions) && req.clarification_questions.length > 0) {
+  if (Array.isArray(req.acceptance_criteria) && req.acceptance_criteria.length > 0) {
     content.push({
       type: "paragraph",
-      content: [{ type: "text", text: "❓ Clarification questions:", marks: [{ type: "strong" }] }],
+      content: [{ type: "text", text: "✅ Acceptance Criteria:", marks: [{ type: "strong" }] }],
     });
     content.push({
       type: "bulletList",
-      content: req.clarification_questions.map((q) => ({
+      content: req.acceptance_criteria.map((ac) => ({
         type: "listItem",
-        content: [{ type: "paragraph", content: [{ type: "text", text: q }] }],
+        content: [{ type: "paragraph", content: [{ type: "text", text: ac }] }],
       })),
     });
   }
@@ -145,7 +133,7 @@ Deno.serve(async (req) => {
     }
 
     const baseUrl = normalizeSiteUrl(connection.site_url);
-    const summarySource = requirement.improved_version || requirement.story_text;
+    const summarySource = requirement.generated_user_story || requirement.story_text;
     const summary =
       summarySource.length > 250 ? summarySource.slice(0, 247) + "..." : summarySource;
 
