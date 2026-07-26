@@ -103,7 +103,6 @@ export default function AnalysisRunner({ projectId, stories, fileName, onCancel,
               clarification_questions: aiResponse.clarification_questions || [],
               generated_user_story: aiResponse.user_story || '',
               acceptance_criteria: aiResponse.acceptance_criteria || [],
-              model_version: 'dora-8b',
               status: 'completed'
             };
           });
