@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../auth/supabaseClient';
 
 // Set VITE_MODAL_API_URL in your .env file (see .env.example).
-const API_URL = import.meta.env.VITE_MODAL_API_URL;
+const API_URL = "https://muhammadtehzeebul--qwen-req-ambiguity-fastapi-app.modal.run";
 const BATCH_SIZE = 10;
 const POLL_INTERVAL_MS = 3000;
 
