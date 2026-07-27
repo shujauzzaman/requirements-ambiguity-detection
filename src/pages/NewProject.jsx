@@ -94,18 +94,11 @@ export default function NewProject() {
                 onChange={(e) => setDomain(e.target.value)}
                 className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-shadow disabled:bg-gray-50"
               >
-                <option value="General SaaS / Enterprise Software">General SaaS / Enterprise Software</option>
-                <option value="Fintech / Banking / Crypto">Fintech / Banking / Crypto</option>
-                <option value="Healthcare / MedTech / Life Sciences">Healthcare / MedTech / Life Sciences</option>
-                <option value="E-commerce / Retail / Marketplace">E-commerce / Retail / Marketplace</option>
-                <option value="Logistics / Supply Chain / Mobility">Logistics / Supply Chain / Mobility</option>
-                <option value="Cybersecurity / Compliance">Cybersecurity / Compliance</option>
-                <option value="AI / Data Analytics Platforms">AI / Data Analytics Platforms</option>
-                <option value="EdTech / Education / E-Learning">EdTech / Education / E-Learning</option>
-                <option value="Entertainment / Media / Streaming">Entertainment / Media / Streaming</option>
-                <option value="GovTech / Public Sector">GovTech / Public Sector</option>
-                <option value="PropTech / Real Estate">PropTech / Real Estate</option>
-                <option value="Other">Other (Specify...)</option>
+                <option value="Fintech">Fintech</option>
+                <option value="Healthcare">Healthcare</option>
+                <option value="E-commerce">E-commerce</option>
+                <option value="Logistics">Logistics</option>
+                <option value="Education">Education</option>
               </select>
 
               {/* Conditional Custom Domain Input Text Bar */}
