@@ -325,12 +325,6 @@ export default function ProjectView() {
                   </div>
                 ))}
                 
-                {/* Reassurance Banner for Large Datasets */}
-                {cleanedStories.length > 5 && (
-                  <div className="p-3 text-center text-xs text-gray-400 bg-gray-100/60 rounded border border-dashed border-gray-200 mt-2 font-sans italic">
-                    Showing first 5 rows. Remaining user stories are fully processed in buffer memory.
-                  </div>
-                )}
               </div>
 
               <div className="mt-6 pt-4 border-t border-gray-100 flex justify-end">
