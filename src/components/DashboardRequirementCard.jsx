@@ -229,6 +229,22 @@ export default function DashboardRequirementCard({ req, isReqExpanded, onToggleE
             )}
           </div>
 
+          {/* 3.5. GENERATED ACCEPTANCE CRITERIA */}
+          <div>
+            <h4 className="font-semibold text-indigo-800 uppercase tracking-wider text-[10px] mb-1">
+              Acceptance Criteria
+            </h4>
+            {req.acceptance_criteria && req.acceptance_criteria.length > 0 ? (
+              <ul className="list-disc pl-5 space-y-1 text-gray-700 bg-white p-3 rounded-lg border border-gray-100">
+                {req.acceptance_criteria.map((ac, idx) => (
+                  <li key={idx}>{ac}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-gray-400 italic bg-white p-3 rounded-lg border border-gray-100">No acceptance criteria generated.</p>
+            )}
+          </div>
+
           {/* 4. JIRA PUSH ACTION — only relevant once a version is approved */}
           {req.status === 'approved' && (
             <div className="pt-1">
