@@ -3,25 +3,27 @@ import { supabase } from '../auth/supabaseClient';
 
 export default function RequirementRow({ requirement, onUpdateSuccess }) {
   const [isEditing, setIsEditing] = useState(false);
-  const [editedText, setEditedText] = useState(requirement.improved_version || requirement.story_text);
+  const [editedText, setEditedText] = useState(
+    requirement.improved_requirement || requirement.improved_version || requirement.story_text
+  );
   const [isSaving, setIsSaving] = useState(false);
+  const [showAC, setShowAC] = useState(false);
 
-  // Handle saving manual inline modifications
   const handleSaveEdit = async () => {
     if (!editedText.trim()) return;
     setIsSaving(true);
-    
+
     try {
       const { error } = await supabase
         .from('requirements')
-        .update({ 
-          improved_version: editedText,
-          status: 'completed' // Reset to completed if they modified it but haven't approved yet
+        .update({
+          improved_requirement: editedText,
+          status: 'completed'
         })
         .eq('id', requirement.id);
 
       if (error) throw error;
-      
+
       setIsEditing(false);
       if (onUpdateSuccess) onUpdateSuccess();
     } catch (err) {
@@ -32,15 +34,14 @@ export default function RequirementRow({ requirement, onUpdateSuccess }) {
     }
   };
 
-  // Handle immediate One-Click Approval
   const handleApprove = async () => {
     setIsSaving(true);
     try {
       const { error } = await supabase
         .from('requirements')
-        .update({ 
-          improved_version: editedText, // Locks in whatever is currently there
-          status: 'approved' 
+        .update({
+          improved_requirement: editedText,
+          status: 'approved'
         })
         .eq('id', requirement.id);
 
@@ -54,8 +55,13 @@ export default function RequirementRow({ requirement, onUpdateSuccess }) {
     }
   };
 
+  // acceptance_criteria is stored as jsonb — comes back as a real JS array already
+  const acceptanceCriteria = Array.isArray(requirement.acceptance_criteria)
+    ? requirement.acceptance_criteria
+    : [];
+
   return (
-    <tr className="hover:bg-gray-50/70 border-b border-gray-100 transition-colors">
+    <tr className="hover:bg-gray-50/70 border-b border-gray-100 transition-colors align-top">
       {/* Original Story Text Column */}
       <td className="px-6 py-4 text-sm text-gray-950 max-w-xs break-words font-sans">
         {requirement.story_text}
@@ -88,7 +94,7 @@ export default function RequirementRow({ requirement, onUpdateSuccess }) {
             <div className="flex gap-2 justify-end">
               <button
                 onClick={() => {
-                  setEditedText(requirement.improved_version || requirement.story_text);
+                  setEditedText(requirement.improved_requirement || requirement.improved_version || requirement.story_text);
                   setIsEditing(false);
                 }}
                 disabled={isSaving}
@@ -108,7 +114,7 @@ export default function RequirementRow({ requirement, onUpdateSuccess }) {
         ) : (
           <div className="group relative">
             <p className={`font-sans leading-relaxed ${requirement.status === 'approved' ? 'text-emerald-950 font-medium' : 'text-gray-700'}`}>
-              {requirement.improved_version || <span className="italic text-gray-400">No refinement needed</span>}
+              {requirement.improved_requirement || requirement.improved_version || <span className="italic text-gray-400">No refinement needed</span>}
             </p>
             {requirement.status !== 'approved' && (
               <button
@@ -119,6 +125,29 @@ export default function RequirementRow({ requirement, onUpdateSuccess }) {
               </button>
             )}
           </div>
+        )}
+      </td>
+
+      {/* ACCEPTANCE CRITERIA COLUMN */}
+      <td className="px-6 py-4 text-sm text-gray-700 max-w-xs">
+        {acceptanceCriteria.length > 0 ? (
+          <div>
+            <button
+              onClick={() => setShowAC(!showAC)}
+              className="text-xs font-medium text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+            >
+              {showAC ? '▾' : '▸'} {acceptanceCriteria.length} criteria
+            </button>
+            {showAC && (
+              <ul className="mt-2 space-y-1.5 list-disc list-inside text-xs text-gray-600 font-sans">
+                {acceptanceCriteria.map((ac, idx) => (
+                  <li key={idx} className="leading-snug">{ac}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ) : (
+          <span className="italic text-gray-400 text-xs">None generated</span>
         )}
       </td>
 
